@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Coral PTT pill -->
+    <path
+        android:fillColor="#EF5A4D"
+        android:pathData="M30,46 H78 a14,14 0 0 1 14,14 v0 a14,14 0 0 1 -14,14 H30 a14,14 0 0 1 -14,-14 v0 a14,14 0 0 1 14,-14 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48,55 h12 a3,3 0 0 1 3,3 v4 a3,3 0 0 1 -3,3 h-12 a3,3 0 0 1 -3,-3 v-4 a3,3 0 0 1 3,-3 z" />
+</vector>

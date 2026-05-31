@@ -1,0 +1,74 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Stage APK with friendly name
+        id: stage
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          src=$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)
+          if [ -z "$src" ]; then
+            echo "No APK produced" >&2
+            exit 1
+          fi
+          # GITHUB_REF_NAME is supplied by the runner and is restricted to git ref characters,
+          # so substituting slashes for dashes is enough sanitisation for a filename.
+          ref="${GITHUB_REF_NAME//\//-}"
+          dest="artifacts/android-ble-ptt-${ref}.apk"
+          cp "$src" "$dest"
+          echo "apk_path=$dest" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$(basename "$dest")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.apk_name }}
+          path: ${{ steps.stage.outputs.apk_path }}
+          if-no-files-found: error
+
+      - name: Publish rolling pre-release (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-main
+          name: Latest build (main)
+          body: |
+            Rolling debug build from the latest commit on `main`. See the Commits tab for what's in this build.
+
+            Debug APK — sideload via a file manager on your phone, or install over ADB.
+          prerelease: true
+          files: ${{ steps.stage.outputs.apk_path }}
+
+      - name: Publish tagged release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: ${{ steps.stage.outputs.apk_path }}
