@@ -12,13 +12,16 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -75,19 +78,57 @@ class PttBleClient(private val appContext: Context) {
 
     private var gatt: BluetoothGatt? = null
     private var scanCallback: ScanCallback? = null
-    private var autoReconnect: Boolean = true
+    private var autoReconnectEnabled: Boolean = true
     private var targetAddress: String? = null
+    private var scanStartedElapsedNs: Long = 0L
+
+    private val _bluetoothEnabled = MutableStateFlow(adapter?.isEnabled == true)
+    val bluetoothEnabled: StateFlow<Boolean> = _bluetoothEnabled.asStateFlow()
+
+    private val adapterStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(
+                BluetoothAdapter.EXTRA_STATE,
+                BluetoothAdapter.STATE_OFF,
+            )
+            val enabled = state == BluetoothAdapter.STATE_ON
+            _bluetoothEnabled.value = enabled
+            if (!enabled) {
+                // Adapter turned off — stop any in-flight scan and surface the disconnection.
+                stopScan()
+                _pressed.value = false
+                if (this@PttBleClient.state.value !is ConnectionState.Idle) {
+                    _state.value = ConnectionState.Disconnected("Bluetooth turned off")
+                }
+            }
+        }
+    }
+
+    init {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.registerReceiver(adapterStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            appContext.registerReceiver(adapterStateReceiver, filter)
+        }
+    }
 
     fun isBluetoothEnabled(): Boolean = adapter?.isEnabled == true
 
     @SuppressLint("MissingPermission")
     fun startScan() {
+        if (adapter?.isEnabled != true) {
+            _state.value = ConnectionState.Error("Bluetooth is off")
+            return
+        }
         val scanner = adapter?.bluetoothLeScanner ?: run {
             _state.value = ConnectionState.Error("Bluetooth scanner unavailable")
             return
         }
         stopScan()
         _devices.value = emptyList()
+        scanStartedElapsedNs = SystemClock.elapsedRealtimeNanos()
         _state.value = ConnectionState.Scanning
 
         val settings = ScanSettings.Builder()
@@ -114,6 +155,11 @@ class PttBleClient(private val appContext: Context) {
     }
 
     private fun handleScanResult(result: ScanResult) {
+        // Android's BLE scanner replays cached advertisements when a new scan begins. Drop any
+        // result whose advertisement was received before this scan session started — otherwise
+        // buttons that aren't currently advertising still show in the pair sheet.
+        if (scanStartedElapsedNs > 0 && result.timestampNanos < scanStartedElapsedNs) return
+
         val name = scanName(result)
         val matchesService = result.scanRecord?.serviceUuids?.any { it.uuid == SERVICE_PTT } == true
         val matchesName = name?.startsWith("PTT", ignoreCase = true) == true
@@ -134,22 +180,33 @@ class PttBleClient(private val appContext: Context) {
         val scanner = adapter?.bluetoothLeScanner ?: return
         scanCallback?.let { scanner.stopScan(it) }
         scanCallback = null
+        scanStartedElapsedNs = 0L
+        _devices.value = emptyList()
+    }
+
+    /**
+     * Initial connect — the user just paired and the button is currently advertising. Uses
+     * autoConnect=false for a fast first connection.
+     */
+    @SuppressLint("MissingPermission")
+    fun connect(address: String) {
+        connectInternal(address, autoConnect = false)
     }
 
     @SuppressLint("MissingPermission")
-    fun connect(address: String) {
+    private fun connectInternal(address: String, autoConnect: Boolean) {
         val device = adapter?.getRemoteDevice(address) ?: run {
             _state.value = ConnectionState.Error("Invalid device address $address")
             return
         }
         stopScan()
-        autoReconnect = true
+        autoReconnectEnabledEnabled = true
         targetAddress = address
         _state.value = ConnectionState.Connecting(address)
         gatt?.close()
         gatt = device.connectGatt(
             appContext,
-            /* autoConnect = */ false,
+            autoConnect,
             gattCallback,
             BluetoothDevice.TRANSPORT_LE,
         )
@@ -157,7 +214,7 @@ class PttBleClient(private val appContext: Context) {
 
     @SuppressLint("MissingPermission")
     fun disconnect() {
-        autoReconnect = false
+        autoReconnectEnabled = false
         targetAddress = null
         gatt?.disconnect()
         gatt?.close()
@@ -179,7 +236,14 @@ class PttBleClient(private val appContext: Context) {
                     _state.value = ConnectionState.Disconnected("status=$status")
                     g.close()
                     gatt = null
-                    if (autoReconnect) scheduleReconnect()
+                    // Re-arm with autoConnect=true so the OS handles wake-on-advertise for us —
+                    // these buttons sleep and only advertise briefly after a press, which is
+                    // exactly the case autoConnect was designed for. Much more battery-friendly
+                    // and reliable in the background than an app-side polling loop.
+                    val addr = targetAddress
+                    if (autoReconnectEnabled && addr != null) {
+                        connectInternal(addr, autoConnect = true)
+                    }
                 }
             }
         }
@@ -269,27 +333,8 @@ class PttBleClient(private val appContext: Context) {
         }
     }
 
-    private fun scheduleReconnect() {
-        val addr = targetAddress ?: return
-        scope.launch {
-            // The button only re-advertises after the next physical press, so this loop sits
-            // patient: try to connect, fail fast if it's not advertising, wait, try again.
-            while (autoReconnect && targetAddress == addr) {
-                delay(RECONNECT_DELAY_MS)
-                if (!autoReconnect) break
-                Log.i(TAG, "Auto-reconnect attempt to $addr")
-                connect(addr)
-                // Give it time to either succeed or bail.
-                delay(CONNECT_ATTEMPT_TIMEOUT_MS)
-                if (state.value is ConnectionState.Connected) break
-            }
-        }
-    }
-
     companion object {
         private const val TAG = "PttBleClient"
-        private const val RECONNECT_DELAY_MS = 2_000L
-        private const val CONNECT_ATTEMPT_TIMEOUT_MS = 8_000L
 
         val SERVICE_PTT: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
         val CHAR_PTT: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")

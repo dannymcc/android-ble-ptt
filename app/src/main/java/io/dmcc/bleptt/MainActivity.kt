@@ -1,10 +1,16 @@
 package io.dmcc.bleptt
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,11 +33,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.clickable
@@ -77,10 +88,44 @@ private fun App(viewModel: PttViewModel) {
     val paired by viewModel.paired.collectAsStateWithLifecycle()
     val activeAddress by viewModel.activePairedAddress.collectAsStateWithLifecycle()
     val scanning by viewModel.isScanning.collectAsStateWithLifecycle()
+    val bluetoothEnabled by viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableStateOf(Tab.Ptt) }
 
     val permissions = rememberMultiplePermissionsState(blePermissions())
+    val enableBluetoothLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { /* The bluetoothEnabled flow reacts to the adapter state change broadcast, so nothing to do here. */ }
+
+    val requestEnableBluetooth: () -> Unit = {
+        enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+    }
+
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var overlayPermitted by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayPermitted = Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        overlayPermitted = Settings.canDrawOverlays(context)
+    }
+    val requestOverlayPermission: () -> Unit = {
+        overlayPermissionLauncher.launch(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}"),
+            ),
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -109,16 +154,21 @@ private fun App(viewModel: PttViewModel) {
                     connectionState = state,
                     discovered = discovered,
                     isScanning = scanning,
+                    bluetoothEnabled = bluetoothEnabled,
+                    overlayPermitted = overlayPermitted,
                     onStartPairing = {
-                        if (!permissions.allPermissionsGranted) {
-                            permissions.launchMultiplePermissionRequest()
-                        } else {
-                            viewModel.startScan()
+                        when {
+                            !permissions.allPermissionsGranted ->
+                                permissions.launchMultiplePermissionRequest()
+                            !bluetoothEnabled -> requestEnableBluetooth()
+                            else -> viewModel.startScan()
                         }
                     },
                     onPickDevice = { viewModel.pair(it) },
                     onCancelPairing = { viewModel.stopScan() },
                     onRemove = { viewModel.unpair(it) },
+                    onRequestEnableBluetooth = requestEnableBluetooth,
+                    onRequestOverlayPermission = requestOverlayPermission,
                 )
             }
         }

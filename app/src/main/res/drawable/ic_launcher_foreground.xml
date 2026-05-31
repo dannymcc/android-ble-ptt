@@ -3,11 +3,50 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Coral PTT pill -->
+
+    <!-- "BLE" tag above the wordmark in pale blue -->
+    <path
+        android:fillColor="#B1CEEF"
+        android:pathData="
+        M40,28 h4 v12 h-4 z
+        M40,28 h7 v3 h-7 z
+        M40,33 h6 v3 h-6 z
+        M40,37 h7 v3 h-7 z
+        M50,28 h4 v12 h-4 z
+        M50,37 h7 v3 h-7 z
+        M58,28 h4 v12 h-4 z
+        M58,28 h8 v3 h-8 z
+        M58,33 h6 v3 h-6 z
+        M58,37 h8 v3 h-8 z" />
+
+    <!-- Letter P (block style) -->
     <path
         android:fillColor="#EF5A4D"
-        android:pathData="M30,46 H78 a14,14 0 0 1 14,14 v0 a14,14 0 0 1 -14,14 H30 a14,14 0 0 1 -14,-14 v0 a14,14 0 0 1 14,-14 z" />
+        android:pathData="
+        M22,46 h6 v40 h-6 z
+        M22,46 h20 v6 h-20 z
+        M36,46 h6 v20 h-6 z
+        M22,60 h20 v6 h-20 z" />
+
+    <!-- Letter T #1 -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M48,55 h12 a3,3 0 0 1 3,3 v4 a3,3 0 0 1 -3,3 h-12 a3,3 0 0 1 -3,-3 v-4 a3,3 0 0 1 3,-3 z" />
+        android:fillColor="#EF5A4D"
+        android:pathData="
+        M46,46 h20 v6 h-20 z
+        M53,46 h6 v40 h-6 z" />
+
+    <!-- Letter T #2 -->
+    <path
+        android:fillColor="#EF5A4D"
+        android:pathData="
+        M70,46 h20 v6 h-20 z
+        M77,46 h6 v40 h-6 z" />
+
+    <!-- Accent bars below the wordmark, like VoxDMR's icon -->
+    <path
+        android:fillColor="#EF5A4D"
+        android:pathData="M22,92 h44 v4 h-44 z" />
+    <path
+        android:fillColor="#8E8E93"
+        android:pathData="M68,92 h22 v4 h-22 z" />
 </vector>

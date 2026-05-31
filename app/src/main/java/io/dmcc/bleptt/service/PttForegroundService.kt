@@ -53,10 +53,12 @@ class PttForegroundService : Service() {
         observer?.cancel()
         observer = scope.launch {
             val client = client()
+            val overlay = (application as PttApp).overlayController
             combine(client.state, client.pressed) { state, pressed -> state to pressed }
                 .distinctUntilChanged()
                 .collect { (state, pressed) ->
                     updateNotification(describe(state, pressed))
+                    if (pressed) overlay.show() else overlay.hide()
                 }
         }
     }
@@ -140,6 +142,7 @@ class PttForegroundService : Service() {
 
     override fun onDestroy() {
         observer?.cancel()
+        (application as PttApp).overlayController.hide()
         super.onDestroy()
     }
 

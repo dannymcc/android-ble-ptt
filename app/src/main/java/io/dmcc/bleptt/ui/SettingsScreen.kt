@@ -20,10 +20,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bluetooth
+import androidx.compose.material.icons.outlined.BluetoothDisabled
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,10 +63,14 @@ fun SettingsScreen(
     connectionState: PttBleClient.ConnectionState,
     discovered: List<PttBleClient.Discovered>,
     isScanning: Boolean,
+    bluetoothEnabled: Boolean,
+    overlayPermitted: Boolean,
     onStartPairing: () -> Unit,
     onPickDevice: (PttBleClient.Discovered) -> Unit,
     onCancelPairing: () -> Unit,
     onRemove: (String) -> Unit,
+    onRequestEnableBluetooth: () -> Unit,
+    onRequestOverlayPermission: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var sheetOpen by remember { mutableStateOf(false) }
@@ -87,6 +93,10 @@ fun SettingsScreen(
 
         SearchPlaceholder()
 
+        if (!bluetoothEnabled) {
+            BluetoothOffBanner(onTurnOn = onRequestEnableBluetooth)
+        }
+
         SectionLabel("HARDWARE")
         // Placeholder for the existing VoxDMR hardware-key option, so the developer can see
         // exactly where BLE PTT slots in next to it. Not wired up in this PoC.
@@ -107,10 +117,18 @@ fun SettingsScreen(
         SettingsRow(
             icon = Icons.Outlined.Bluetooth,
             title = "BLE PTT button",
-            subtitle = bleSubtitle(paired = paired, activeAddress = activeAddress, state = connectionState),
+            subtitle = if (bluetoothEnabled) {
+                bleSubtitle(paired = paired, activeAddress = activeAddress, state = connectionState)
+            } else {
+                "Bluetooth is off · tap to turn on"
+            },
             onClick = {
-                onStartPairing()
-                sheetOpen = true
+                if (!bluetoothEnabled) {
+                    onRequestEnableBluetooth()
+                } else {
+                    onStartPairing()
+                    sheetOpen = true
+                }
             },
             trailing = {
                 Icon(
@@ -129,6 +147,25 @@ fun SettingsScreen(
                 onRemove = { onRemove(button.address) },
             )
         }
+
+        SectionLabel("BACKGROUND")
+        SettingsRow(
+            icon = Icons.Outlined.Layers,
+            title = "Floating PTT overlay",
+            subtitle = if (overlayPermitted) {
+                "On · shows a TX pill over any app while the button is held"
+            } else {
+                "Not granted · tap to allow Display over other apps"
+            },
+            onClick = if (overlayPermitted) null else onRequestOverlayPermission,
+            trailing = {
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = VoxColors.Muted,
+                )
+            },
+        )
 
         SectionLabel("ABOUT")
         SettingsRow(
@@ -161,6 +198,48 @@ fun SettingsScreen(
 
     LaunchedEffect(sheetOpen) {
         if (!sheetOpen) onCancelPairing()
+    }
+}
+
+@Composable
+private fun BluetoothOffBanner(onTurnOn: () -> Unit) {
+    Surface(
+        color = VoxColors.SurfaceElevated,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .clickable(onClick = onTurnOn),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.BluetoothDisabled,
+                contentDescription = null,
+                tint = VoxColors.Coral,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Bluetooth is off",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "Turn it on to pair a button",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = VoxColors.Muted,
+                )
+            }
+            Text(
+                text = "Turn on",
+                style = MaterialTheme.typography.labelLarge,
+                color = VoxColors.PillBlue,
+            )
+        }
     }
 }
 

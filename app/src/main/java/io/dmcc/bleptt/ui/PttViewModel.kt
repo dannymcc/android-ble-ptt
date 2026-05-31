@@ -25,6 +25,7 @@ class PttViewModel(application: Application) : AndroidViewModel(application) {
     val isTransmitting: StateFlow<Boolean> = client.pressed
     val discoveredDevices: StateFlow<List<PttBleClient.Discovered>> = client.devices
     val paired: StateFlow<List<PairedButton>> = repo.paired
+    val bluetoothEnabled: StateFlow<Boolean> = client.bluetoothEnabled
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()

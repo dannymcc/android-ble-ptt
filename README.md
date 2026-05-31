@@ -16,10 +16,13 @@ Tagged versions (`v0.1.0`, etc.) also publish to Releases.
 
 ## What it does
 
-- **PTT tab** — a big TX indicator. When the BLE button is pressed, the indicator goes coral; on release, it returns to dark. That's it — no audio, no DMR, no network. The point is to demonstrate that the BLE event reaches the app reliably.
-- **Settings tab** — *Add a BLE PTT button* opens a pairing sheet that scans for buttons, lets you pick one, and remembers it. The paired list shows connection state and lets you remove any button you've paired.
-
-A foreground service keeps the BLE link alive when the screen is off and other apps are in the foreground — the whole reason for using a native BLE button rather than a remapped HID/media-key.
+- **PTT tab** — a big TX indicator. When the BLE button is pressed, the indicator goes coral; on release, it returns to dark.
+- **Settings tab** — sectioned like VoxDMR. Under *Hardware*, the *BLE PTT button* row opens a pairing sheet that scans for buttons, lets you pick one, and remembers it. Paired buttons sit inline below with connection state and a remove icon. Under *Background*, a *Floating PTT overlay* row links to the "Display over other apps" grant.
+- **Background reliability**
+  - Foreground service with `foregroundServiceType=connectedDevice` keeps the BLE link alive with the screen off and other apps in the foreground.
+  - Auto-reconnect uses `connectGatt(autoConnect=true)` so Android handles wake-on-advertise natively when the button sleeps and re-advertises after the next press.
+  - **Floating TX pill** — when the button is held, a coral "● TX" pill appears at the top of the screen over whatever app is in the foreground (or over the lockscreen). Same pattern as Zello, so you can confirm a press without unlocking the phone.
+- **Bluetooth-off gating** — if Bluetooth is off, Settings shows a banner and the BLE PTT row reroutes to the OS enable prompt instead of failing silently.
 
 ## BLE protocol it expects
 
@@ -66,6 +69,7 @@ Requires JDK 17, Android SDK with `compileSdk = 34`, `minSdk = 26`.
 - Legacy `BLUETOOTH` / `BLUETOOTH_ADMIN` / `ACCESS_FINE_LOCATION` for Android 8–11
 - `POST_NOTIFICATIONS` for the foreground-service notification on Android 13+
 - `FOREGROUND_SERVICE_CONNECTED_DEVICE` for the BLE-keepalive service
+- `SYSTEM_ALERT_WINDOW` (special permission, user-granted in system Settings) for the floating TX overlay
 
 ## License
 
