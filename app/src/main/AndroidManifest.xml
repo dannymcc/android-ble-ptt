@@ -24,6 +24,11 @@
          even when the phone is showing a different app or the lockscreen. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Lets us wake the screen when the BLE button is held, so the press is observable on a
+         locked or sleeping device — Zello-style. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />
