@@ -37,12 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,15 +60,15 @@ fun SettingsScreen(
     isScanning: Boolean,
     bluetoothEnabled: Boolean,
     overlayPermitted: Boolean,
+    pairSheetOpen: Boolean,
     onStartPairing: () -> Unit,
     onPickDevice: (PttBleClient.Discovered) -> Unit,
-    onCancelPairing: () -> Unit,
+    onDismissPairSheet: () -> Unit,
     onRemove: (String) -> Unit,
     onRequestEnableBluetooth: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var sheetOpen by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
@@ -122,14 +117,7 @@ fun SettingsScreen(
             } else {
                 "Bluetooth is off · tap to turn on"
             },
-            onClick = {
-                if (!bluetoothEnabled) {
-                    onRequestEnableBluetooth()
-                } else {
-                    onStartPairing()
-                    sheetOpen = true
-                }
-            },
+            onClick = { onStartPairing() },
             trailing = {
                 Icon(
                     Icons.Outlined.ChevronRight,
@@ -176,12 +164,9 @@ fun SettingsScreen(
         )
     }
 
-    if (sheetOpen) {
+    if (pairSheetOpen) {
         ModalBottomSheet(
-            onDismissRequest = {
-                onCancelPairing()
-                sheetOpen = false
-            },
+            onDismissRequest = onDismissPairSheet,
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
@@ -190,14 +175,10 @@ fun SettingsScreen(
                 isScanning = isScanning,
                 onPick = { device ->
                     onPickDevice(device)
-                    scope.launch { sheetState.hide() }.invokeOnCompletion { sheetOpen = false }
+                    scope.launch { sheetState.hide() }
                 },
             )
         }
-    }
-
-    LaunchedEffect(sheetOpen) {
-        if (!sheetOpen) onCancelPairing()
     }
 }
 

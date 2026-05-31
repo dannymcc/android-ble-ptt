@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -127,6 +128,38 @@ private fun App(viewModel: PttViewModel) {
         )
     }
 
+    // Pairing sheet state lives here so we can defer opening it until permissions + Bluetooth are
+    // actually ready. Otherwise the first-time-pair flow shows an empty sheet while the user is
+    // still working through the OS permission and BT-enable prompts.
+    var pairSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingPair by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pendingPair, permissions.allPermissionsGranted, bluetoothEnabled) {
+        if (pendingPair && permissions.allPermissionsGranted && bluetoothEnabled) {
+            pendingPair = false
+            pairSheetOpen = true
+            viewModel.startScan()
+        }
+    }
+
+    val startPairing: () -> Unit = {
+        pendingPair = true
+        when {
+            !permissions.allPermissionsGranted ->
+                permissions.launchMultiplePermissionRequest()
+            !bluetoothEnabled -> requestEnableBluetooth()
+            // Else case is handled by the LaunchedEffect above — it'll flip pendingPair off,
+            // open the sheet, and start the scan in one consistent step.
+            else -> Unit
+        }
+    }
+
+    val dismissPairSheet: () -> Unit = {
+        pendingPair = false
+        pairSheetOpen = false
+        viewModel.stopScan()
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -156,16 +189,10 @@ private fun App(viewModel: PttViewModel) {
                     isScanning = scanning,
                     bluetoothEnabled = bluetoothEnabled,
                     overlayPermitted = overlayPermitted,
-                    onStartPairing = {
-                        when {
-                            !permissions.allPermissionsGranted ->
-                                permissions.launchMultiplePermissionRequest()
-                            !bluetoothEnabled -> requestEnableBluetooth()
-                            else -> viewModel.startScan()
-                        }
-                    },
-                    onPickDevice = { viewModel.pair(it) },
-                    onCancelPairing = { viewModel.stopScan() },
+                    pairSheetOpen = pairSheetOpen,
+                    onStartPairing = startPairing,
+                    onPickDevice = { viewModel.pair(it); pairSheetOpen = false },
+                    onDismissPairSheet = dismissPairSheet,
                     onRemove = { viewModel.unpair(it) },
                     onRequestEnableBluetooth = requestEnableBluetooth,
                     onRequestOverlayPermission = requestOverlayPermission,
