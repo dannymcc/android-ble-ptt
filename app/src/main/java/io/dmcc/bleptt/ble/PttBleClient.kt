@@ -200,7 +200,7 @@ class PttBleClient(private val appContext: Context) {
             return
         }
         stopScan()
-        autoReconnectEnabledEnabled = true
+        autoReconnectEnabled = true
         targetAddress = address
         _state.value = ConnectionState.Connecting(address)
         gatt?.close()
