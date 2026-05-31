@@ -116,6 +116,18 @@ class PttBleClient(private val appContext: Context) {
 
     fun isBluetoothEnabled(): Boolean = adapter?.isEnabled == true
 
+    /**
+     * The address this client is currently bonded to in software — i.e., the address it will
+     * auto-reconnect to. May be set even when [state] is Disconnected (autoConnect=true is
+     * silently waiting for the peripheral to re-advertise). Callers need this to know whether
+     * removing a paired button should also tear down the BLE link.
+     */
+    fun currentTarget(): String? = targetAddress
+
+    fun forgetDevice(address: String) {
+        _devices.update { current -> current.filterNot { it.device.address == address } }
+    }
+
     @SuppressLint("MissingPermission")
     fun startScan() {
         if (adapter?.isEnabled != true) {

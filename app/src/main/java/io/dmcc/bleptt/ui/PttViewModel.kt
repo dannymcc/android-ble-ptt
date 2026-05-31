@@ -64,9 +64,14 @@ class PttViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unpair(address: String) {
         repo.remove(address)
-        if (activePairedAddress.value == address) {
+        // Tear down the BLE link if the removed button is the one we're tracking — including the
+        // autoConnect-waiting case where state is Disconnected and activePairedAddress is null.
+        // Without this, the OS keeps a background scan running for the device and our app keeps
+        // showing it in the next scan even though the user has "removed" it.
+        if (client.currentTarget() == address) {
             client.disconnect()
         }
+        client.forgetDevice(address)
         if (repo.paired.value.isEmpty()) {
             PttForegroundService.stop(getApplication())
         }
