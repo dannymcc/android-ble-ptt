@@ -25,19 +25,30 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.FormatPaint
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +57,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.dmcc.bleptt.ble.PttBleClient
+import io.dmcc.bleptt.data.OverlayColour
+import io.dmcc.bleptt.data.OverlayPosition
+import io.dmcc.bleptt.data.OverlaySettings
+import io.dmcc.bleptt.data.OverlayStyle
 import io.dmcc.bleptt.data.PairedButton
 import io.dmcc.bleptt.ui.theme.VoxColors
 import kotlinx.coroutines.launch
@@ -61,14 +76,19 @@ fun SettingsScreen(
     bluetoothEnabled: Boolean,
     overlayPermitted: Boolean,
     pairSheetOpen: Boolean,
+    overlaySettings: OverlaySettings,
     onStartPairing: () -> Unit,
     onPickDevice: (PttBleClient.Discovered) -> Unit,
     onDismissPairSheet: () -> Unit,
     onRemove: (String) -> Unit,
     onRequestEnableBluetooth: () -> Unit,
     onRequestOverlayPermission: () -> Unit,
+    onOverlayStyleChange: (OverlayStyle) -> Unit,
+    onOverlayPositionChange: (OverlayPosition) -> Unit,
+    onOverlayColourChange: (OverlayColour) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var picker by remember { mutableStateOf<OverlayPicker?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
@@ -141,7 +161,7 @@ fun SettingsScreen(
             icon = Icons.Outlined.Layers,
             title = "Floating PTT overlay",
             subtitle = if (overlayPermitted) {
-                "On · shows a TX pill over any app while the button is held"
+                "On · shows over any app while the button is held"
             } else {
                 "Not granted · tap to allow Display over other apps"
             },
@@ -154,6 +174,40 @@ fun SettingsScreen(
                 )
             },
         )
+        Divider()
+        SettingsRow(
+            icon = Icons.Outlined.FormatPaint,
+            title = "Overlay style",
+            subtitle = overlaySettings.style.label,
+            onClick = { picker = OverlayPicker.Style },
+            trailing = {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = VoxColors.Muted)
+            },
+        )
+        Divider()
+        SettingsRow(
+            icon = Icons.Outlined.SwapVert,
+            title = "Overlay position",
+            subtitle = overlaySettings.position.label,
+            onClick = { picker = OverlayPicker.Position },
+            trailing = {
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = VoxColors.Muted)
+            },
+        )
+        Divider()
+        SettingsRow(
+            icon = Icons.Outlined.Palette,
+            title = "Overlay colour",
+            subtitle = overlaySettings.colour.label,
+            onClick = { picker = OverlayPicker.Colour },
+            trailing = {
+                Box(
+                    Modifier
+                        .size(18.dp)
+                        .background(Color(overlaySettings.colour.argb), CircleShape),
+                )
+            },
+        )
 
         SectionLabel("ABOUT")
         SettingsRow(
@@ -161,6 +215,17 @@ fun SettingsScreen(
             title = "BLE PTT proof of concept",
             subtitle = "HM-10 service 0xFFE0 · notify 0xFFE1",
             onClick = null,
+        )
+    }
+
+    picker?.let { p ->
+        OverlayPickerDialog(
+            picker = p,
+            current = overlaySettings,
+            onDismiss = { picker = null },
+            onStyle = { onOverlayStyleChange(it); picker = null },
+            onPosition = { onOverlayPositionChange(it); picker = null },
+            onColour = { onOverlayColourChange(it); picker = null },
         )
     }
 
@@ -178,6 +243,148 @@ fun SettingsScreen(
                     scope.launch { sheetState.hide() }
                 },
             )
+        }
+    }
+}
+
+private enum class OverlayPicker { Style, Position, Colour }
+
+private val OverlayStyle.label: String
+    get() = when (this) {
+        OverlayStyle.Pill -> "Pill"
+        OverlayStyle.Banner -> "Banner"
+        OverlayStyle.Border -> "Border"
+        OverlayStyle.Dot -> "Dot"
+    }
+
+private val OverlayStyle.description: String
+    get() = when (this) {
+        OverlayStyle.Pill -> "Small rounded pill"
+        OverlayStyle.Banner -> "Full-width strip"
+        OverlayStyle.Border -> "Coloured screen border"
+        OverlayStyle.Dot -> "Small corner indicator"
+    }
+
+private val OverlayPosition.label: String
+    get() = when (this) {
+        OverlayPosition.Top -> "Top"
+        OverlayPosition.Bottom -> "Bottom"
+    }
+
+private val OverlayColour.label: String
+    get() = when (this) {
+        OverlayColour.Coral -> "Coral"
+        OverlayColour.Blue -> "Blue"
+        OverlayColour.Green -> "Green"
+        OverlayColour.White -> "White"
+    }
+
+@Composable
+private fun OverlayPickerDialog(
+    picker: OverlayPicker,
+    current: OverlaySettings,
+    onDismiss: () -> Unit,
+    onStyle: (OverlayStyle) -> Unit,
+    onPosition: (OverlayPosition) -> Unit,
+    onColour: (OverlayColour) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done", color = VoxColors.PillBlue) }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                text = when (picker) {
+                    OverlayPicker.Style -> "Overlay style"
+                    OverlayPicker.Position -> "Overlay position"
+                    OverlayPicker.Colour -> "Overlay colour"
+                },
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        },
+        text = {
+            Column {
+                when (picker) {
+                    OverlayPicker.Style -> OverlayStyle.values().forEach { style ->
+                        PickerRow(
+                            selected = current.style == style,
+                            title = style.label,
+                            subtitle = style.description,
+                            onClick = { onStyle(style) },
+                        )
+                    }
+                    OverlayPicker.Position -> OverlayPosition.values().forEach { position ->
+                        PickerRow(
+                            selected = current.position == position,
+                            title = position.label,
+                            subtitle = null,
+                            onClick = { onPosition(position) },
+                        )
+                    }
+                    OverlayPicker.Colour -> OverlayColour.values().forEach { colour ->
+                        PickerRow(
+                            selected = current.colour == colour,
+                            title = colour.label,
+                            subtitle = null,
+                            leading = {
+                                Box(
+                                    Modifier
+                                        .size(20.dp)
+                                        .background(Color(colour.argb), CircleShape),
+                                )
+                            },
+                            onClick = { onColour(colour) },
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun PickerRow(
+    selected: Boolean,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    leading: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = VoxColors.PillBlue,
+                unselectedColor = VoxColors.Muted,
+            ),
+        )
+        if (leading != null) {
+            Spacer(Modifier.width(4.dp))
+            leading()
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (!subtitle.isNullOrEmpty()) {
+                Text(
+                    text = subtitle,
+                    color = VoxColors.Muted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

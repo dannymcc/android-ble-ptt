@@ -5,6 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.dmcc.bleptt.PttApp
 import io.dmcc.bleptt.ble.PttBleClient
+import io.dmcc.bleptt.data.OverlayColour
+import io.dmcc.bleptt.data.OverlayPosition
+import io.dmcc.bleptt.data.OverlayPreferences
+import io.dmcc.bleptt.data.OverlaySettings
+import io.dmcc.bleptt.data.OverlayStyle
 import io.dmcc.bleptt.data.PairedButton
 import io.dmcc.bleptt.data.PairedRepository
 import io.dmcc.bleptt.service.PttForegroundService
@@ -20,12 +25,18 @@ class PttViewModel(application: Application) : AndroidViewModel(application) {
     private val app: PttApp = application as PttApp
     private val client: PttBleClient = app.bleClient
     private val repo: PairedRepository = app.pairedRepository
+    private val overlayPrefs: OverlayPreferences = app.overlayPreferences
 
     val connectionState: StateFlow<PttBleClient.ConnectionState> = client.state
     val isTransmitting: StateFlow<Boolean> = client.pressed
     val discoveredDevices: StateFlow<List<PttBleClient.Discovered>> = client.devices
     val paired: StateFlow<List<PairedButton>> = repo.paired
     val bluetoothEnabled: StateFlow<Boolean> = client.bluetoothEnabled
+    val overlaySettings: StateFlow<OverlaySettings> = overlayPrefs.settings
+
+    fun setOverlayStyle(style: OverlayStyle) = overlayPrefs.setStyle(style)
+    fun setOverlayPosition(position: OverlayPosition) = overlayPrefs.setPosition(position)
+    fun setOverlayColour(colour: OverlayColour) = overlayPrefs.setColour(colour)
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()

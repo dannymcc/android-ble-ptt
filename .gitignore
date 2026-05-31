@@ -39,9 +39,11 @@ captures/
 *.iml
 .idea/
 
-# Keystore files
+# Keystore files (release / signing). The committed debug.keystore is intentionally
+# tracked so every CI build signs with the same key — see app/build.gradle.kts.
 *.jks
 *.keystore
+!app/debug.keystore
 
 # External native build folder
 .externalNativeBuild

@@ -53,12 +53,19 @@ class PttForegroundService : Service() {
         observer?.cancel()
         observer = scope.launch {
             val client = client()
-            val overlay = (application as PttApp).overlayController
-            combine(client.state, client.pressed) { state, pressed -> state to pressed }
+            val app = application as PttApp
+            val overlay = app.overlayController
+            combine(
+                client.state,
+                client.pressed,
+                app.overlayPreferences.settings,
+            ) { state, pressed, overlaySettings ->
+                Triple(state, pressed, overlaySettings)
+            }
                 .distinctUntilChanged()
-                .collect { (state, pressed) ->
+                .collect { (state, pressed, overlaySettings) ->
                     updateNotification(describe(state, pressed))
-                    if (pressed) overlay.show() else overlay.hide()
+                    if (pressed) overlay.show(overlaySettings) else overlay.hide()
                 }
         }
     }

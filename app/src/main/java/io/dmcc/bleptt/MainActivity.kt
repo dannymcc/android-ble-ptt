@@ -90,6 +90,7 @@ private fun App(viewModel: PttViewModel) {
     val activeAddress by viewModel.activePairedAddress.collectAsStateWithLifecycle()
     val scanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val bluetoothEnabled by viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
+    val overlaySettings by viewModel.overlaySettings.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableStateOf(Tab.Ptt) }
 
@@ -190,12 +191,16 @@ private fun App(viewModel: PttViewModel) {
                     bluetoothEnabled = bluetoothEnabled,
                     overlayPermitted = overlayPermitted,
                     pairSheetOpen = pairSheetOpen,
+                    overlaySettings = overlaySettings,
                     onStartPairing = startPairing,
                     onPickDevice = { viewModel.pair(it); pairSheetOpen = false },
                     onDismissPairSheet = dismissPairSheet,
                     onRemove = { viewModel.unpair(it) },
                     onRequestEnableBluetooth = requestEnableBluetooth,
                     onRequestOverlayPermission = requestOverlayPermission,
+                    onOverlayStyleChange = viewModel::setOverlayStyle,
+                    onOverlayPositionChange = viewModel::setOverlayPosition,
+                    onOverlayColourChange = viewModel::setOverlayColour,
                 )
             }
         }
